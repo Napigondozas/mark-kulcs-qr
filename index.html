@@ -1,1 +1,428 @@
+<!DOCTYPE html>
 
+<html lang="hu">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>🔑 Kulcs QR olvasó</title>
+
+
+  <!--
+    QR-kód olvasó könyvtár
+  -->
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+
+    body {
+
+      margin: 0;
+
+      padding: 20px;
+
+      font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+
+      background: #f2f2f2;
+
+      color: #222;
+
+    }
+
+
+    .container {
+
+      max-width: 500px;
+
+      margin: 0 auto;
+
+    }
+
+
+    .card {
+
+      background: white;
+
+      border-radius: 14px;
+
+      padding: 20px;
+
+      box-shadow:
+        0 2px 10px rgba(0,0,0,0.10);
+
+    }
+
+
+    h1 {
+
+      margin-top: 0;
+
+      text-align: center;
+
+      font-size: 24px;
+
+    }
+
+
+    .instruction {
+
+      text-align: center;
+
+      margin-bottom: 20px;
+
+      color: #555;
+
+    }
+
+
+    #reader {
+
+      width: 100%;
+
+      margin: 0 auto;
+
+    }
+
+
+    .status {
+
+      margin-top: 20px;
+
+      padding: 12px;
+
+      border-radius: 8px;
+
+      text-align: center;
+
+      background: #f0f0f0;
+
+    }
+
+
+    .success {
+
+      background: #e8f5e9;
+
+    }
+
+
+    .error {
+
+      background: #ffebee;
+
+    }
+
+
+    button {
+
+      width: 100%;
+
+      margin-top: 15px;
+
+      padding: 14px;
+
+      border: none;
+
+      border-radius: 10px;
+
+      font-size: 16px;
+
+      cursor: pointer;
+
+    }
+
+
+  </style>
+
+</head>
+
+
+<body>
+
+
+<div class="container">
+
+  <div class="card">
+
+
+    <h1>🔑 QR-kód olvasó</h1>
+
+
+    <div class="instruction">
+
+      Irányítsd a kamerát a kulcshoz tartozó QR-kódra.
+
+    </div>
+
+
+    <div id="reader"></div>
+
+
+    <div
+      id="status"
+      class="status">
+
+      Kamera indítása...
+
+    </div>
+
+
+  </div>
+
+</div>
+
+
+<script>
+
+
+let scanner = null;
+
+let scannerRunning = false;
+
+
+/* ===========================================
+   ÜZENET
+=========================================== */
+
+function setStatus(message, type) {
+
+  const element =
+    document.getElementById("status");
+
+
+  element.textContent =
+    message;
+
+
+  element.className =
+    "status";
+
+
+  if (type) {
+
+    element.classList.add(type);
+
+  }
+
+}
+
+
+/* ===========================================
+   QR SIKERES FELISMERÉS
+=========================================== */
+
+function onScanSuccess(decodedText) {
+
+  if (scannerRunning === false) {
+
+    return;
+
+  }
+
+
+  scannerRunning = false;
+
+
+  const keyId =
+    String(decodedText || "").trim();
+
+
+  if (!keyId) {
+
+    setStatus(
+      "A QR-kód nem tartalmaz adatot.",
+      "error"
+    );
+
+    return;
+
+  }
+
+
+  setStatus(
+    "Beolvasva: " + keyId,
+    "success"
+  );
+
+
+  if (navigator.vibrate) {
+
+    navigator.vibrate(150);
+
+  }
+
+
+  /*
+   * Visszaküldjük a beolvasott kulcsot
+   * a kulcskezelőnek.
+   *
+   * A QR-oldal új ablakban/fülön nyílik meg,
+   * ezért a window.opener lesz a kulcskezelő.
+   */
+
+  if (window.opener) {
+
+    window.opener.postMessage(
+
+      {
+        type: "ORION_QR_SCANNED",
+        keyId: keyId
+      },
+
+      "*"
+
+    );
+
+
+    /*
+     * Rövid várakozás után bezárjuk
+     * ezt az ablakot.
+     */
+
+    setTimeout(function() {
+
+      window.close();
+
+    }, 500);
+
+
+    return;
+
+  }
+
+
+  /*
+   * Ha valamiért nincs opener,
+   * jelezzük a problémát.
+   */
+
+  setStatus(
+    "A kulcskezelő ablaka nem található.",
+    "error"
+  );
+
+}
+
+
+/* ===========================================
+   KAMERA INDÍTÁSA
+=========================================== */
+
+function startCamera() {
+
+  if (scannerRunning) {
+
+    return;
+
+  }
+
+
+  scanner =
+    new Html5Qrcode("reader");
+
+
+  const config = {
+
+    fps: 10,
+
+    qrbox: {
+      width: 250,
+      height: 250
+    }
+
+  };
+
+
+  setStatus(
+    "Kamera indítása..."
+  );
+
+
+  /*
+   * Mobilon elsősorban a hátlapi kamerát kérjük.
+   */
+
+  scanner
+
+    .start(
+
+      {
+        facingMode: "environment"
+      },
+
+      config,
+
+      onScanSuccess,
+
+      function () {
+
+        /*
+         * Sikertelen képkocka.
+         * Normál működés közben figyelmen kívül hagyjuk.
+         */
+
+      }
+
+    )
+
+    .then(function() {
+
+      scannerRunning = true;
+
+      setStatus(
+        "Kamera aktív – keresem a QR-kódot."
+      );
+
+    })
+
+    .catch(function(error) {
+
+      console.error(
+        "Kameraindítási hiba:",
+        error
+      );
+
+
+      setStatus(
+
+        "Nem sikerült elindítani a kamerát. " +
+        "Ellenőrizd a kameraengedélyt.",
+
+        "error"
+
+      );
+
+    });
+
+}
+
+
+/* ===========================================
+   INDÍTÁS
+=========================================== */
+
+startCamera();
+
+
+</script>
+
+
+</body>
+
+</html>
